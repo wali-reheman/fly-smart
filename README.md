@@ -2,7 +2,9 @@
 
 > **Find cheaper flight routes using hidden-city arbitrage and hub transfer combinations.**
 
-`fly-smart` is a Hermes Agent skill that finds cheaper ways to fly by combining two one-way tickets through a strategic hub — exploiting pricing differences between airlines and routes that Google Flights doesn't always surface directly.
+`fly-smart` is a Hermes Agent skill that finds cheaper ways to fly by combining
+two one-way tickets through a strategic hub — exploiting pricing differences between
+airlines and routes that Google Flights doesn't always surface directly.
 
 **No API keys. No browser. Just smarter flying.**
 
@@ -10,9 +12,12 @@
 
 ## How It Works
 
-When you search for a direct flight, airlines price routes based on demand, competition, and hub strength — not just distance. This creates **pricing arbitrage**: a flight from A → B → C can sometimes cost less than A → C direct.
+When you search for a direct flight, airlines price routes based on demand, competition,
+and hub strength — not just distance. This creates **pricing arbitrage**: a flight from
+A → B → C can sometimes cost less than A → C direct.
 
-`fly-smart` scans 70+ global hubs, finds these combos, and shows you exactly how much you'd save — with a full price calendar across multiple dates and departure airports.
+`fly-smart` scans 70+ global hubs, finds these combos, and shows you exactly how much
+you'd save — with a full price calendar across multiple dates and departure airports.
 
 ---
 
@@ -57,11 +62,12 @@ When you search for a direct flight, airlines price routes based on demand, comp
 
 ```bash
 # 1. Clone this repo into your Hermes skills directory
-git clone https://github.com/wali-reheman/skills.git ~/.hermes/skills/repos/wali-reheman
+git clone https://github.com/wali-reheman/fly-smart.git \
+  ~/.hermes/skills/repos/wali-reheman/fly-smart
 
 # 2. Set up the Python environment (venv required — PEP 668 restriction)
 python3 -m venv ~/.hermes/venvs/flight-search
-~/.hermes/venvs/flight-search/bin/pip install flight-search
+~/.hermes/venvs/flight-search/bin/pip install fast-flights
 ```
 
 ---
@@ -123,17 +129,6 @@ python3 ~/.hermes/scripts/flight-transfer-finder.py -o LAX -d HKG -dt 2026-05-20
 
 ---
 
-## Why Python + httpx, Not Rust?
-
-The bottleneck is **network I/O** — waiting for Google's servers to respond. Rust would not make HTTP faster. Python's async `httpx` layer already saturates the network pipe efficiently.
-
-Key optimizations in v4:
-- **Direct library calls** (zero subprocess overhead)
-- **Per-route semaphore** — prevents thundering-herd where 8 threads all hit the same URL and trigger rate limiting
-- **8 threads** (not 16) — `httpx` connection pool exhausts at ~16 concurrent requests
-
----
-
 ## Repository Structure
 
 ```
@@ -145,15 +140,11 @@ fly-smart/
 
 ---
 
-## Related Skills
+## Contributing
 
-| Skill | Description |
-|-------|-------------|
-| `find-nearby` | Find nearby places — restaurants, cafes, bars, pharmacies |
+PRs welcome! See [fly-smart](https://github.com/wali-reheman/fly-smart) for the canonical repo.
 
 ---
-
-
 
 ## License
 
