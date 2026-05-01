@@ -153,14 +153,7 @@ fly-smart/
 
 ---
 
-## Author
 
-**Wali Reheman** — PhD candidate, American University. Building research and productivity tools for academic workflows.
-
-- GitHub: [wali-reheman](https://github.com/wali-reheman)
-- LinkedIn: [ Wali Reheman](https://linkedin.com/in/wali-reheman)
-
----
 
 ## License
 
