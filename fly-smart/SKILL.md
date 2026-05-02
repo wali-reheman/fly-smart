@@ -1,203 +1,133 @@
 ---
 name: fly-smart
-description: Find cheaper flight routes using hidden-city arbitrage and hub transfer combinations — exploits pricing differences between airlines and routes that Google Flights doesn't surface directly. No API keys. Supports 70+ global hubs, multi-date and multi-origin scanning, SQLite caching, and self-transfer detection.
+description: Find cheaper flight routes using hidden-city arbitrage and hub transfer combinations. Activates when users search for flights, find cheap flights, compare routes, or look for budget travel deals. Supports 70+ global hubs, multi-date scanning, SQLite caching, and self-transfer detection. No API keys required.
+version: "1.0.0"
 license: MIT
+compatibility: macOS, Linux (Python 3.10+ with venv)
 metadata:
   author: wali-reheman
-  version: "1.0.0"
-  tags: [flights, travel, self-transfer, hidden-city, google-flights, budget-travel, arbitrage, hub-transfer]
-triggers:
-  - "search flights"
-  - "find flights"
-  - "flight deals"
-  - "cheap flights"
-  - "flights from X to Y"
-  - "transfer flights"
-  - "hidden city"
-  - "self transfer"
-  - "fly smart"
-  - "cheaper route"
-tools:
-  - terminal
-  - web_search
-  - browser
+  hermes:
+    tags: [flights, travel, self-transfer, hidden-city, google-flights, budget-travel, arbitrage, hub-transfer]
+    category: productivity
+required_environment_variables:
+  - name: VENV_PATH
+    prompt: Python venv path for flight-search
+    help: Defaults to ~/.hermes/venvs/flight-search. Only change if custom path needed.
+    required_for: all operations
 ---
 
 # Flight Search Skill
 
-## Tool Setup
+## When to Use
 
-**Python library**: `fast_flights` — calls Google Flights via httpx, no subprocess.
+- User asks to search for flights, find cheap flights, or compare flight routes
+- User wants to find the cheapest way to fly between two cities
+- User mentions "hidden city", "self transfer", "transfer flights", or "hub hopping"
+- User asks about budget travel or arbitrage opportunities in airfares
+- User wants multi-date flight searches or flexible date options
+- User wants to search flights from multiple nearby airports simultaneously
 
-**Installation** (venv required due to PEP 668):
+## Procedure
+
+### Step 1 — Set Up the Python Environment
+
+Create an isolated venv (required due to PEP 668 dependency conflicts):
+
 ```bash
 python3 -m venv ~/.hermes/venvs/flight-search
 ~/.hermes/venvs/flight-search/bin/pip install flight-search
 ```
 
-**CLI binary**: `~/.hermes/venvs/flight-search/bin/flight-search`
+The venv installs the `flight-search` CLI at:
+`~/.hermes/venvs/flight-search/bin/flight-search`
 
----
+And the `flight-transfer-finder.py` script at:
+`~/.hermes/scripts/flight-transfer-finder.py`
 
-## 1. Direct Flight Search (CLI)
+### Step 2 — Quick Direct Flight Search (CLI)
+
+For single-date, direct origin→destination lookups:
 
 ```bash
 ~/.hermes/venvs/flight-search/bin/flight-search <ORIGIN> <DESTINATION> -d YYYY-MM-DD [options]
 ```
 
-| Option | Description |
-|--------|-------------|
-| `-d YYYY-MM-DD` | Departure date (required) |
-| `-r YYYY-MM-DD` | Return date |
-| `-a N` | Adults (default 1) |
-| `-C` | Cabin: economy, premium-economy, business, first |
-| `-l N` | Max results |
-| `-o text\|json` | Output format |
+**Options:**
+- `-d YYYY-MM-DD` — Departure date (required)
+- `-r YYYY-MM-DD` — Return date
+- `-a N` — Number of adults (default: 1)
+- `-C cabin` — Cabin class: economy, premium-economy, business, first
+- `-l N` — Max results to return
+- `-o text|json` — Output format
 
----
+### Step 3 — Transfer Finder for Hidden-City and Hub Arbitrage
 
-## 2. Transfer Finder v4 — Self-Transfer / Hidden-City
-
-**Script**: `~/.hermes/scripts/flight-transfer-finder.py`
-
-Calls `fast_flights` as a Python library (zero subprocess overhead). Per-route semaphore prevents Google rate-limiting. Checks 70+ global hubs concurrently with SQLite cache (1h TTL).
-
-### fast_flights Library Usage Pattern
-
-**Correct import** (venv Python, not system Python):
-```python
-import sys
-sys.path.insert(0, "~/.hermes/venvs/flight-search/lib/python3.14/site-packages")
-from fast_flights import FlightData, Passengers, get_flights
-```
-
-**Correct API call**:
-```python
-result = get_flights(
-    flight_data=[FlightData(from_airport="LAX", to_airport="HKG", date="2026-05-20")],
-    trip="one-way",
-    passengers=Passengers(adults=1),
-    seat="economy",
-)
-# result.flights: list of Flight namedtuples with .price, .name, .departure, .arrival, .stops
-```
-
-**Common mistakes**:
-- ❌ `FlightData(origin=..., destination=...)` — wrong field names, use `from_airport`/`to_airport`
-- ❌ `Passengers(adults=1)` without import — must `from fast_flights import Passengers`
-- ❌ Calling from system Python — httpx version mismatch, must use venv Python
-- ❌ Concurrent calls to same route from multiple threads — triggers Google rate limiting; use per-route semaphore
-- ❌ 16+ threads for httpx — connection pool exhausts at ~16; 8 threads is optimal
-
-### Concurrency Architecture
-
-```
-ThreadPoolExecutor(max_workers=8)
-  └─ search_flight(origin, dest, date, cabin)
-       ├─ cache_get()  → SQLite (thread-safe, 1h TTL)
-       ├─ per-route semaphore (prevents thundering herd on same URL)
-       └─ get_flights()  → httpx → Google Flights
-```
-
-**Per-route semaphore pattern** (critical for Google rate-limit survival):
-```python
-_route_semaphores: dict[str, threading.Semaphore] = {}
-_sem_lock = Lock()
-
-def _get_route_sem(route_key: str) -> threading.Semaphore:
-    with _sem_lock:
-        if route_key not in _route_semaphores:
-            _route_semaphores[route_key] = threading.Semaphore(1)
-        return _route_semaphores[route_key]
-
-# In search_flight():
-with _get_route_sem(f"{origin}:{destination}:{date}:{cabin}"):
-    result = get_flights(...)
-```
-
-### Debugging / Common Errors
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `ValueError: invalid literal for int()` on price | Flight.price is empty/whitespace string | Strip price, check digits before int() conversion |
-| `TypeError: get_flights() got unexpected keyword argument` | Wrong field names on FlightData | Use `from_airport`/`to_airport`, not `origin`/`destination` |
-| `ModuleNotFoundError: No module named 'playwright'` | Called with `fetch_mode='local'` | Don't use `fetch_mode='local'`; 'common' mode works fine |
-| `Impersonate 'chrome_126' does not exist` | Normal httpx impersonation warning | Safe to ignore; fast_flights falls back to random user agent |
-| All calls return `$N/A` prices | 16+ threads overwhelming Google | Reduce to 8 workers; per-route semaphore prevents thundering herd |
-| `ValueError: min() arg is an empty sequence` | All flights filtered out | Check price parsing; empty-string prices crash `min()` |
-
-### Hub Routing Intelligence
-
-The script uses `get_relevant_hubs(origin, destination)` to pick 25 contextually relevant hubs instead of all 70+. Logic:
-- US West Coast → Asia/HKG: bias toward Northeast Asia + Greater China + SEA hubs
-- East Coast US → Europe: bias toward LHR/FRA/AMS/CDG + Middle East + US East
-- Override with `--aggressive` (60 hubs) or `--all-hubs` (all 70+)
-
-### Examples
+For cheaper routes via intermediate hubs (separate tickets, no checked bags):
 
 ```bash
-# Single date
-python3 ~/.hermes/scripts/flight-transfer-finder.py -o SFO -d HKG -dt 2026-05-20
-
-# Multi-date ±3 days (7 dates in parallel)
-python3 ~/.hermes/scripts/flight-transfer-finder.py -o LAX -d HKG -dt 2026-05-20 --flexible 3
-
-# Multi-origin
-python3 ~/.hermes/scripts/flight-transfer-finder.py -o SFO,LAX,OAK -d HKG -dt 2026-05-20
-
-# Full power: ±7 days, 60 hubs, save history, 10min timeout
-python3 ~/.hermes/scripts/flight-transfer-finder.py -o LAX -d HKG -dt 2026-05-20 \
-  --flexible 7 --aggressive --save-route --timeout 600
+python3 ~/.hermes/scripts/flight-transfer-finder.py -o <ORIGIN> -d <DESTINATION> -dt <YYYY-MM-DD> [options]
 ```
 
-### Arguments
+**Key arguments:**
+- `-o` — Origin airport(s), comma-separated for multi-origin searches
+- `-d` — Destination airport IATA code
+- `-dt` — Reference departure date
+- `--flexible N` — Scan ±N days around the reference date
+- `--aggressive` — Check 60 hubs (default: 25 contextually chosen hubs)
+- `--all-hubs` — Check all 70+ global hubs
+- `--save-route` — Append results to `~/.hermes/data/flight-searches.jsonl`
+- `--json` — Raw JSON output for programmatic processing
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `-o` | Origin(s), comma-separated | required |
-| `-d` | Destination IATA | required |
-| `-dt` | Reference departure date | required |
-| `--flexible N` | Scan ±N days around --dt | off |
-| `--date-range START:END` | Explicit YYYY-MM-DD:YYYY-MM-DD range | off |
-| `--aggressive` | Check 60 hubs (default: 25) | off |
-| `--all-hubs` | Check all 70+ hubs | off |
-| `--max-workers N` | Concurrent threads (8 is optimal) | 8 |
-| `--no-cache` | Bypass cache, force fresh | cache on |
-| `--save-route` | Append results to `~/.hermes/data/flight-searches.jsonl` | off |
-| `--alert-below PRICE` | Only report if best transfer < PRICE | off |
-| `--timeout N` | Overall timeout in seconds | 600 |
-| `--json` | Raw JSON output | off |
+### Step 4 — Interpret Results
 
-### Hub Regions (70+ airports)
+The script returns a sorted list of route options:
+- **Direct**: Standard non-stop or single-ticket routes
+- **Transfer**: Two separate tickets via a hub — cheaper but requires:
+  - No checked bags (carry-on + personal item only)
+  - 3+ hours between legs for immigration/customs/terminal transfer
+  - Valid transit visa for the hub country if needed
 
-Northeast Asia (NRT, HND, ICN, TPE, KIX…), Greater China (PVG, PEK, CAN, SZX…), Southeast Asia (SIN, BKK, KUL…), Middle East (DXB, DOH, IST…), Europe (LHR, FRA, AMS, CDG…), US West/East/Central, Canada/Mexico, Oceania, Africa.
+### Step 5 — Verify Successful Search
 
-> **See also**: `references/transfer-routes.md` — route-specific hub recommendations (e.g. US→HKG: TPE/SEA/NRT dominate; Europe→HKG: DXB/DOH competitive).
+- Results show price in USD, departure/arrival times, stops, and cabin
+- Empty price fields (`$N/A`) indicate the route was rate-limited — retry with fewer threads or cache bypass
+- SQLite cache expires after 1 hour; use `--no-cache` to force fresh results
 
-### Self-Transfer Rules
+## Examples
 
-- Book **two separate one-way tickets** — not a round-trip
-- **No checked bags** — carry-on + personal item only
-- **3h+ buffer** between connecting legs
-- Check **transit visa** requirements for the hub country
+### Example 1: Single date, direct route
 
-### Performance (v4 vs v3)
+```
+Input: "Find flights from LAX to HKG on May 20th"
+Expected behavior: Run `flight-search LAX HKG -d 2026-05-20` and present top results with prices, times, and stops.
+```
 
-| Scan | v3 (subprocess) | v4 (library + semaphore) |
-|------|----------------|--------------------------|
-| DC × 3 origins × 7 dates | 214s | **66s** |
-| CA × 5 origins × 7 dates | timeout | **118s** |
+### Example 2: Cheaper route via transfer
 
-**Why Python + httpx is optimal here, not Rust**: the bottleneck is network I/O (waiting for Google's servers to respond), not CPU computation. Rust would not make HTTP faster. The async httpx layer already saturates the network pipe efficiently.
+```
+Input: "Find the cheapest way to fly from SFO to HKG, I don't mind a layover"
+Expected behavior: Run transfer finder with `--flexible 3` to check ±3 days across 25+ hubs. Present savings vs direct booking.
+```
 
----
+### Example 3: Multi-origin power search
 
-## 3. Alternatives
+```
+Input: "Compare flights from SFO, LAX, and OAK to Bangkok for mid-June"
+Expected behavior: Run transfer finder with `-o SFO,LAX,OAK -d BKK -dt 2026-06-15 --flexible 5`. Aggregate and rank all results.
+```
 
-| Method | Best For | API Key |
-|--------|----------|---------|
-| `flight-search` CLI | Quick terminal lookups | No |
-| Transfer Finder v4 | Self-transfer / hidden-city deals | No |
-| Browser automation (Chrome CDP) | Full interactive search, multi-city | No |
-| MCP server `fli` | AI assistant integration | No |
-| Skyscanner / Amadeus API | Production apps needing licensed data | Yes |
+## Pitfalls
+
+- **Wrong field names crash `get_flights()`**: Use `from_airport`/`to_airport`, NOT `origin`/`destination` — the API uses different field names than typical conventions
+- **System Python vs venv Python**: Always call from the venv Python, not system Python — httpx version mismatch causes `ModuleNotFoundError`
+- **16+ threads triggers Google rate-limiting**: Use 8 threads max; the per-route semaphore prevents thundering herd but thread count still matters
+- **Empty price strings crash `min()`**: Some routes return `$N/A` or blank prices — always validate price is numeric before `int()` conversion
+- **Self-transfer requires two separate bookings**: These are notrefundable if one leg cancels; do not use for tight connections
+- **3-hour minimum connection time for self-transfer**: Less time risks missing the second leg due to delays, customs, or terminal transfers
+
+## Verification
+
+- Run `python3 ~/.hermes/scripts/flight-transfer-finder.py -o <ORIGIN> -d <DEST> -dt <DATE> --json` and confirm JSON output with valid prices
+- Confirm no `ModuleNotFoundError` or `ValueError` in stderr
+- For rate-limit cases, verify `--no-cache` bypasses stale cached `$N/A` results
+- Confirm results are sorted by total price ascending
