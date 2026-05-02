@@ -45,9 +45,9 @@ Documentation = "https://github.com/wali-reheman/fly-smart#readme"
 Repository = "https://github.com/wali-reheman/fly-smart"
 Issues = "https://github.com/wali-reheman/fly-smart/issues"
 
-[tool.setuptools]
-packages = ["fly_smart"]
-package-dir = {"" = "fly_smart"}
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fly_smart*"]
 
 [tool.ruff]
 line-length = 100
