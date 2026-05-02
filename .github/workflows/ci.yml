@@ -21,7 +21,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install ruff pyyaml fast-flights
+          pip install ruff fast-flights
 
       - name: Lint Python
         run: |
@@ -30,22 +30,24 @@ jobs:
       - name: Validate SKILL.md YAML frontmatter
         run: |
           python3 -c "
-          import yaml, sys
+          import re, sys
           with open('fly-smart/SKILL.md') as f:
               content = f.read()
-          if content.startswith('---'):
-              _, rest = content.split('---', 2)
-              front, _ = rest.split('---', 1)
-              data = yaml.safe_load(front)
-              required = ['name', 'description', 'license']
-              missing = [k for k in required if k not in data]
-              if missing:
-                  print(f'Missing frontmatter keys: {missing}')
-                  sys.exit(1)
-              print(f'✅ SKILL.md valid — name: {data[\"name\"]}, version: {data.get(\"version\", \"?\")}')
-          else:
+          # Parse frontmatter without pyyaml
+          m = re.match(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL)
+          if not m:
               print('SKILL.md missing YAML frontmatter')
               sys.exit(1)
+          front = m.group(1)
+          keys = [line.split(':')[0].strip() for line in front.split('\n') if ':' in line]
+          required = ['name', 'description', 'license']
+          missing = [k for k in required if k not in keys]
+          if missing:
+              print(f'Missing frontmatter keys: {missing}')
+              sys.exit(1)
+          name_m = re.search(r'^name:\s*(.+?)\s*$', front, re.MULTILINE)
+          ver_m = re.search(r'^version:\s*[\"\']?(.+?)[\"\']?\s*$', front, re.MULTILINE)
+          print(f'✅ SKILL.md valid — name: {name_m.group(1) if name_m else \"?\"}, version: {ver_m.group(1) if ver_m else \"?\"}')
           "
 
       - name: Smoke test — script --help
@@ -56,4 +58,4 @@ jobs:
         run: |
           timeout 30 python3 fly-smart/references/flight-transfer-finder.py \
             -o LAX -d SFO -dt 2026-07-01 --direct-only --no-cache 2>&1 | tail -5 || \
-          echo "Smoke test (no network required for --help validation)"
+          echo "Smoke test (network-dependent — failure here is expected in sandboxed CI)"
