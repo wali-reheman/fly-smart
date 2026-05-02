@@ -38,27 +38,15 @@ python3 -m venv ~/.hermes/venvs/flight-search
 ~/.hermes/venvs/flight-search/bin/pip install flight-search
 ```
 
-The venv installs the `flight-search` CLI at:
-`~/.hermes/venvs/flight-search/bin/flight-search`
+The `flight-transfer-finder.py` script at `~/.hermes/scripts/flight-transfer-finder.py` is the main tool.
 
-And the `flight-transfer-finder.py` script at:
-`~/.hermes/scripts/flight-transfer-finder.py`
-
-### Step 2 — Quick Direct Flight Search (CLI)
+### Step 2 — Quick Direct Flight Search
 
 For single-date, direct origin→destination lookups:
 
 ```bash
 ~/.hermes/venvs/flight-search/bin/flight-search <ORIGIN> <DESTINATION> -d YYYY-MM-DD [options]
 ```
-
-**Options:**
-- `-d YYYY-MM-DD` — Departure date (required)
-- `-r YYYY-MM-DD` — Return date
-- `-a N` — Number of adults (default: 1)
-- `-C cabin` — Cabin class: economy, premium-economy, business, first
-- `-l N` — Max results to return
-- `-o text|json` — Output format
 
 ### Step 3 — Transfer Finder for Hidden-City and Hub Arbitrage
 
@@ -68,66 +56,77 @@ For cheaper routes via intermediate hubs (separate tickets, no checked bags):
 python3 ~/.hermes/scripts/flight-transfer-finder.py -o <ORIGIN> -d <DESTINATION> -dt <YYYY-MM-DD> [options]
 ```
 
-**Key arguments:**
-- `-o` — Origin airport(s), comma-separated for multi-origin searches
-- `-d` — Destination airport IATA code
-- `-dt` — Reference departure date
-- `--flexible N` — Scan ±N days around the reference date
-- `--aggressive` — Check 60 hubs (default: 25 contextually chosen hubs)
-- `--all-hubs` — Check all 70+ global hubs
-- `--save-route` — Append results to `~/.hermes/data/flight-searches.jsonl`
-- `--json` — Raw JSON output for programmatic processing
+**Arguments quick reference:**
 
-### Step 4 — Interpret Results
+| Argument | Description | Default |
+|---|---|---|
+| `-o` | Origin airport(s), comma-separated | required |
+| `-d` | Destination airport IATA | required |
+| `-dt` | Reference departure date (YYYY-MM-DD) | required |
+| `--flexible N` | Scan ±N days around --dt | off |
+| `--aggressive` | Check 60 hubs instead of 25 | off |
+| `--all-hubs` | Check all 70+ global hubs | off |
+| `--save-route` | Append results to `~/.hermes/data/flight-searches.jsonl` | off |
+| `--json` | Raw JSON output | off |
+| `--no-cache` | Bypass 1h price cache | off |
+| `-C cabin` | Cabin: economy, premium-economy, business, first | economy |
 
-The script returns a sorted list of route options:
-- **Direct**: Standard non-stop or single-ticket routes
-- **Transfer**: Two separate tickets via a hub — cheaper but requires:
-  - No checked bags (carry-on + personal item only)
-  - 3+ hours between legs for immigration/customs/terminal transfer
-  - Valid transit visa for the hub country if needed
+### Step 4 — Present Results
 
-### Step 5 — Verify Successful Search
+Format output as a markdown table sorted by total price:
 
-- Results show price in USD, departure/arrival times, stops, and cabin
-- Empty price fields (`$N/A`) indicate the route was rate-limited — retry with fewer threads or cache bypass
-- SQLite cache expires after 1 hour; use `--no-cache` to force fresh results
+```
+| Route | Price | Type | Duration | Notes |
+|-------|-------|------|---------|-------|
+| LAX→TPE→HKG | $487 | Transfer ⚠️ | 26h | 3h20m layover, no checked bags |
+| LAX→HKG | $892 | Direct | 15h30m | Nonstop |
+```
+
+**Rules for self-transfer results:**
+- Mark with ⚠️ and note: "⚠️ Self-transfer — two separate bookings, no checked bags, 3h+ buffer required"
+- Flag savings: if transfer saves >$100, add **💡 Saves $XXX vs direct**
+- Always include booking link if available from results
+
+### Step 5 — Verify
+
+Run this exact command and confirm clean JSON output:
+
+```bash
+python3 ~/.hermes/scripts/flight-transfer-finder.py -o LAX -d HKG -dt 2026-06-15 --json
+```
+
+✅ Success: valid JSON array, prices are numeric, no `ValueError` or `ModuleNotFoundError` in stderr.
+❌ Rate-limited: all prices show `$N/A` — retry with `--no-cache`.
+❌ Import error: venv Python not being used — confirm path starts with `~/.hermes/venvs/`.
 
 ## Examples
 
 ### Example 1: Single date, direct route
-
 ```
 Input: "Find flights from LAX to HKG on May 20th"
-Expected behavior: Run `flight-search LAX HKG -d 2026-05-20` and present top results with prices, times, and stops.
+Run: flight-search LAX HKG -d 2026-05-20
+Present: top 3 results as a markdown table with price, duration, stops
 ```
 
 ### Example 2: Cheaper route via transfer
-
 ```
 Input: "Find the cheapest way to fly from SFO to HKG, I don't mind a layover"
-Expected behavior: Run transfer finder with `--flexible 3` to check ±3 days across 25+ hubs. Present savings vs direct booking.
+Run: python3 ~/.hermes/scripts/flight-transfer-finder.py -o SFO -d HKG -dt 2026-06-15 --flexible 3
+Present: sorted table, highlight best transfer with savings vs direct
 ```
 
 ### Example 3: Multi-origin power search
-
 ```
 Input: "Compare flights from SFO, LAX, and OAK to Bangkok for mid-June"
-Expected behavior: Run transfer finder with `-o SFO,LAX,OAK -d BKK -dt 2026-06-15 --flexible 5`. Aggregate and rank all results.
+Run: python3 ~/.hermes/scripts/flight-transfer-finder.py -o SFO,LAX,OAK -d BKK -dt 2026-06-15 --flexible 5
+Present: all origins aggregated and ranked by price
 ```
 
 ## Pitfalls
 
-- **Wrong field names crash `get_flights()`**: Use `from_airport`/`to_airport`, NOT `origin`/`destination` — the API uses different field names than typical conventions
-- **System Python vs venv Python**: Always call from the venv Python, not system Python — httpx version mismatch causes `ModuleNotFoundError`
-- **16+ threads triggers Google rate-limiting**: Use 8 threads max; the per-route semaphore prevents thundering herd but thread count still matters
-- **Empty price strings crash `min()`**: Some routes return `$N/A` or blank prices — always validate price is numeric before `int()` conversion
-- **Self-transfer requires two separate bookings**: These are notrefundable if one leg cancels; do not use for tight connections
-- **3-hour minimum connection time for self-transfer**: Less time risks missing the second leg due to delays, customs, or terminal transfers
-
-## Verification
-
-- Run `python3 ~/.hermes/scripts/flight-transfer-finder.py -o <ORIGIN> -d <DEST> -dt <DATE> --json` and confirm JSON output with valid prices
-- Confirm no `ModuleNotFoundError` or `ValueError` in stderr
-- For rate-limit cases, verify `--no-cache` bypasses stale cached `$N/A` results
-- Confirm results are sorted by total price ascending
+- **Wrong field names crash `get_flights()`**: Use `from_airport`/`to_airport`, NOT `origin`/`destination`
+- **System Python vs venv Python**: Always call from the venv Python — system Python has httpx version mismatch
+- **16+ threads triggers Google rate-limiting**: Use 8 threads max; per-route semaphore prevents thundering herd
+- **Empty price strings crash `min()`**: Validate price is numeric before `int()` conversion
+- **Self-transfer requires two separate bookings**: Non-refundable if one leg cancels; do not use for tight connections
+- **3-hour minimum connection time for self-transfer**: Less time risks missed connections due to delays or terminal transfers
