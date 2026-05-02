@@ -1,0 +1,32 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+title: "[FEATURE] "
+labels: ["enhancement"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ✨ Feature Request
+
+        Have an idea for how to make fly-smart better? We'd love to hear it.
+  - type: textarea
+    id: use-case
+    attributes:
+      label: "Use case"
+      description: "What would you use this feature for? What's the route and scenario?"
+      placeholder: "I want to find cheap flights from SFO to BKK with a stop in Tokyo..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposed
+    attributes:
+      label: "Proposed solution"
+      description: "How do you imagine this working?"
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Alternatives considered"
+      description: "Any other approaches you've thought about?"

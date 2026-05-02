@@ -1,0 +1,59 @@
+name: Bug Report
+description: Report something that isn't working correctly
+title: "[BUG] "
+labels: ["bug"]
+assignees: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 🐛 Bug Report
+
+        Thank you for reporting a bug. Please fill in as much detail as possible.
+  - type: textarea
+    id: command
+    attributes:
+      label: "Command that failed"
+      description: "Paste the exact command you ran"
+      placeholder: "python3 ~/.hermes/scripts/flight-transfer-finder.py -o LAX -d HKG -dt 2026-05-20"
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: "Full error output"
+      description: "Paste the complete error traceback"
+      placeholder: |
+        Traceback (most recent call last):
+          ...
+    validations:
+      required: true
+  - type: dropdown
+    id: python-version
+    attributes:
+      label: "Python version"
+      options:
+        - "3.10"
+        - "3.11"
+        - "3.12"
+        - "3.13"
+        - "Other"
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Expected behavior"
+      description: "What should have happened?"
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: "Actual behavior"
+      description: "What happened instead?"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Environment"
+      description: "OS, Hermes Agent version, any other relevant details"
