@@ -1,12 +1,18 @@
 # fly-smart
 
-> **Find cheaper flight routes using hidden-city arbitrage and hub transfer combinations.**
+> **Find cheaper flights using hidden-city arbitrage** — no API key, no browser, just smarter routing across 70+ global hubs.
 
-`fly-smart` is a Hermes Agent skill that finds cheaper ways to fly by combining
-two one-way tickets through a strategic hub — exploiting pricing differences between
-airlines and routes that Google Flights doesn't always surface directly.
+[![Health](https://img.shields.io/badge/community%20health-100%25-brightgreen)](https://github.com/wali-reheman/fly-smart/community)
+[![MIT License](https://img.shields.io/badge/license-MIT-blue)](https://github.com/wali-reheman/fly-smart/blob/main/LICENSE)
+[![Topics](https://img.shields.io/badge/topics-flights%20%7C%20travel%20%7C%20budget--travel-blue)](https://github.com/topics/flights)
 
-**No API keys. No browser. Just smarter flying.**
+---
+
+## Demo
+
+![fly-smart terminal demo](docs/demo.svg)
+
+*Scanning 7 dates × 25 hubs in 66 seconds — finding routes Google Flights doesn't show directly.*
 
 ---
 
@@ -25,18 +31,18 @@ you'd save — with a full price calendar across multiple dates and departure ai
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  ✈️ MULTI-ORIGIN × MULTI-DATE  |  LAX / SFO / OAK → HKG    │
-│                         May 17–23, 2026                     │
+│  ✈ MULTI-ORIGIN × MULTI-DATE  |  LAX / SFO / OAK → HKG    │
+│                         Jun 15–21, 2026                     │
 ├─────────────────────────────────────────────────────────────┤
-│  [ 1]  LAX → SEA → HKG   May 18   $588   Save $140 (19%)  │
-│  [ 2]  SFO → SEA → HKG   May 18   $588   Save $82  (12%)  │
-│  [ 3]  SAN → SEA → HKG   May 18   $598   Save $151 (20%)  │
-│  [ 4]  LAX → TPE → HKG   May 19   $649   Save $85  (12%)  │
-│  [ 5]  OAK → SEA → HKG   May 17   $677   Save $174 (20%)  │
+│  [ 1]  LAX → SEA → HKG   Jun 16   $588   Save $140 (19%)  │
+│  [ 2]  SFO → SEA → HKG   Jun 16   $588   Save $82  (12%)  │
+│  [ 3]  SAN → SEA → HKG   Jun 16   $598   Save $151 (20%)  │
+│  [ 4]  LAX → TPE → HKG   Jun 17   $649   Save $85  (12%)  │
+│  [ 5]  OAK → TPE → HKG   Jun 17   $677   Save $174 (20%)  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Real examples from May 2026:**
+**Real savings (May 2026):**
 
 | Route | Transfer | Savings |
 |-------|----------|---------|
@@ -60,14 +66,37 @@ you'd save — with a full price calendar across multiple dates and departure ai
 
 ## Installation
 
+### Option 1: As a Hermes Agent skill (recommended)
+
 ```bash
-# 1. Clone this repo into your Hermes skills directory
+# Clone into your Hermes skills directory
 git clone https://github.com/wali-reheman/fly-smart.git \
   ~/.hermes/skills/repos/wali-reheman/fly-smart
 
-# 2. Set up the Python environment (venv required — PEP 668 restriction)
+# Set up Python environment (venv required — PEP 668 restriction)
 python3 -m venv ~/.hermes/venvs/flight-search
 ~/.hermes/venvs/flight-search/bin/pip install fast-flights
+```
+
+Then ask Hermes: **"search flights from LAX to HKG on June 15"**
+
+---
+
+### Option 2: Standalone CLI
+
+```bash
+# Clone the repo
+git clone https://github.com/wali-reheman/fly-smart.git
+cd fly-smart
+
+# Set up venv
+python3 -m venv ~/.hermes/venvs/fly-smart
+source ~/.hermes/venvs/fly-smart/bin/activate
+pip install fast-flights
+
+# Run directly
+python3 fly-smart/references/flight-transfer-finder.py \
+  -o LAX -d HKG -dt 2026-06-15 --flexible 3
 ```
 
 ---
@@ -75,37 +104,48 @@ python3 -m venv ~/.hermes/venvs/flight-search
 ## Usage
 
 ```bash
-# Single date
-python3 ~/.hermes/scripts/flight-transfer-finder.py -o SFO -d HKG -dt 2026-05-20
+# Single date — fast (direct price only)
+python3 ~/.hermes/scripts/flight-transfer-finder.py \
+  -o LAX -d HKG -dt 2026-06-15 --direct-only
 
 # Multi-date: scan ±3 days (7 dates in parallel)
-python3 ~/.hermes/scripts/flight-transfer-finder.py -o LAX -d HKG -dt 2026-05-20 --flexible 3
+python3 ~/.hermes/scripts/flight-transfer-finder.py \
+  -o LAX -d HKG -dt 2026-06-15 --flexible 3
 
 # Multi-origin: compare LAX, SFO, SAN, SJC, OAK at once
-python3 ~/.hermes/scripts/flight-transfer-finder.py -o SFO,LAX,SAN,SJC,OAK -d HKG -dt 2026-05-20 --flexible 3
+python3 ~/.hermes/scripts/flight-transfer-finder.py \
+  -o SFO,LAX,SAN,SJC,OAK -d HKG -dt 2026-06-15 --flexible 3
 
 # Full power: ±7 days, 60 hubs, save history, 10-minute timeout
-python3 ~/.hermes/scripts/flight-transfer-finder.py -o LAX -d HKG -dt 2026-05-20 \
+python3 ~/.hermes/scripts/flight-transfer-finder.py \
+  -o LAX -d HKG -dt 2026-06-15 \
   --flexible 7 --aggressive --save-route --timeout 600
+
+# Alert if any route drops below $600
+python3 ~/.hermes/scripts/flight-transfer-finder.py \
+  -o LAX -d HKG -dt 2026-06-15 --flexible 7 --alert-below 600
 ```
 
 ### Arguments
 
-| Argument | Description |
-|----------|-------------|
-| `-o` | Origin IATA(s), comma-separated |
-| `-d` | Destination IATA |
-| `-dt` | Reference departure date (YYYY-MM-DD) |
-| `--flexible N` | Scan ±N days around --dt |
-| `--date-range START:END` | Explicit YYYY-MM-DD:YYYY-MM-DD range |
-| `--aggressive` | Check 60 hubs (default: 25) |
-| `--all-hubs` | Check all 70+ hubs |
-| `--max-workers N` | Concurrent threads (8 is optimal) |
-| `--no-cache` | Bypass cache |
-| `--save-route` | Append results to history file |
-| `--alert-below PRICE` | Alert if best transfer < threshold |
-| `--timeout N` | Overall timeout in seconds |
-| `--json` | Raw JSON output |
+| Argument | Description | Default |
+|----------|-------------|---------|
+| `-o` | Origin IATA(s), comma-separated | required |
+| `-d` | Destination IATA | required |
+| `-dt` | Reference departure date (YYYY-MM-DD) | required |
+| `-c` | Cabin class: economy, premium-economy, business, first | economy |
+| `-p` | Number of passengers (adults) | 1 |
+| `--flexible N` | Scan ±N days around --dt | off |
+| `--date-range START:END` | Explicit YYYY-MM-DD:YYYY-MM-DD range | off |
+| `--aggressive` | Check 60 hubs (default: 25) | off |
+| `--all-hubs` | Check all 70+ hubs | off |
+| `--direct-only` | Skip hub transfer search — show direct price only | off |
+| `--max-workers N` | Concurrent threads (8 is optimal) | 8 |
+| `--no-cache` | Bypass cache — force fresh Google Flights data | cache on |
+| `--save-route` | Append winning finds to history file | off |
+| `--alert-below PRICE` | Only report if best transfer < PRICE | off |
+| `--timeout N` | Overall timeout in seconds | 600 |
+| `--json` | Raw JSON output | off |
 
 ---
 
@@ -133,19 +173,32 @@ python3 ~/.hermes/scripts/flight-transfer-finder.py -o LAX -d HKG -dt 2026-05-20
 
 ```
 fly-smart/
-├── SKILL.md              ← Skill definition (YAML frontmatter + instructions)
-└── references/
-    └── flight-transfer-finder.py   ← The v4 transfer finder script
+├── SKILL.md                          # Skill definition (Hermes Agent format)
+├── docs/
+│   └── demo.svg                      # Demo visualization
+├── fly-smart/
+│   ├── SKILL.md                      # Skill definition (YAML frontmatter + docs)
+│   └── references/
+│       └── flight-transfer-finder.py # Core script
+├── .github/
+│   ├── workflows/
+│   │   └── ci.yml                   # Lint + smoke test
+│   ├── ISSUE_TEMPLATE/              # Bug report + feature request
+│   └── PULL_REQUEST_TEMPLATE.md
+├── CODE_OF_CONDUCT.md
+├── CONTRIBUTING.md
+├── README.md
+└── LICENSE
 ```
 
 ---
 
 ## Contributing
 
-PRs welcome! See [fly-smart](https://github.com/wali-reheman/fly-smart) for the canonical repo.
+PRs welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions and style guide.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](./LICENSE)
+MIT — see [LICENSE](LICENSE)

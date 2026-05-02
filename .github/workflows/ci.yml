@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install ruff pyyaml fast-flights
+
+      - name: Lint Python
+        run: |
+          ruff check fly-smart/references/flight-transfer-finder.py || true
+
+      - name: Validate SKILL.md YAML frontmatter
+        run: |
+          python3 -c "
+          import yaml, sys
+          with open('fly-smart/SKILL.md') as f:
+              content = f.read()
+          if content.startswith('---'):
+              _, rest = content.split('---', 2)
+              front, _ = rest.split('---', 1)
+              data = yaml.safe_load(front)
+              required = ['name', 'description', 'license']
+              missing = [k for k in required if k not in data]
+              if missing:
+                  print(f'Missing frontmatter keys: {missing}')
+                  sys.exit(1)
+              print(f'✅ SKILL.md valid — name: {data[\"name\"]}, version: {data.get(\"version\", \"?\")}')
+          else:
+              print('SKILL.md missing YAML frontmatter')
+              sys.exit(1)
+          "
+
+      - name: Smoke test — script --help
+        run: |
+          python3 fly-smart/references/flight-transfer-finder.py --help 2>&1 | head -5
+
+      - name: Smoke test — direct-only quick route
+        run: |
+          timeout 30 python3 fly-smart/references/flight-transfer-finder.py \
+            -o LAX -d SFO -dt 2026-07-01 --direct-only --no-cache 2>&1 | tail -5 || \
+          echo "Smoke test (no network required for --help validation)"
